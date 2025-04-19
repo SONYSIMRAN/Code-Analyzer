@@ -1,0 +1,6 @@
+projectKey=CodeAnalyzer
+serverUrl=http://localhost:9000
+serverVersion=25.4.0.105899
+dashboardUrl=http://localhost:9000/dashboard?id=CodeAnalyzer
+ceTaskId=a57de607-f8b5-43cc-958c-0a19fd0e9e50
+ceTaskUrl=http://localhost:9000/api/ce/task?id=a57de607-f8b5-43cc-958c-0a19fd0e9e50
