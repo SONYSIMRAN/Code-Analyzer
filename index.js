@@ -1,3 +1,8 @@
+// Patch dynamic import if needed (for Node.js v18+)
+import('module').then(module => {
+  global.__importModule = module;
+});
+
 const express = require('express');
 const fs = require('fs');
 const { exec } = require('child_process');
