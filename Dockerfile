@@ -1,29 +1,17 @@
-FROM node:20
+# Your existing setup...
+FROM node:18
 
+RUN npm install --global sfdx-cli
 
+# ✅ Use compatible scanner version (v3.17.0)
+RUN sfdx plugins:install @salesforce/sfdx-scanner@3.17.0
 
-# Install Salesforce CLI & Scanner Plugin
-# RUN npm install --global sfdx-cli && \
-#     sfdx plugins:install @salesforce/sfdx-scanner
+# Optionally disable auto updates for stability
+ENV SFDX_DISABLE_AUTOUPDATE=true
 
-# ...
-RUN sfdx plugins:uninstall @salesforce/sfdx-scanner && \
-    sfdx plugins:install @salesforce/sfdx-scanner@3.17.0
-# ...
+COPY . /app
+WORKDIR /app
 
-
-# Set working directory
-WORKDIR /usr/src/app
-
-# Copy package files and install deps
-COPY package*.json ./
-RUN npm install
-
-# Copy app source
-COPY . .
-
-# Expose port
 EXPOSE 8080
 
-# Run the app
 CMD ["node", "index.js"]
