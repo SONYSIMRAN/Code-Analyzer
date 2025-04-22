@@ -10,6 +10,10 @@ const { exec } = require('child_process');
 const app = express();
 const port = process.env.PORT || 8080;
 
+// ✅ HEALTH CHECK (For UptimeRobot or cron-job.org)
+app.get('/healthz', (req, res) => {
+  res.send('OK');
+});
 
 // This is what parses the incoming JSON request
 app.use(express.json());
