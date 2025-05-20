@@ -20,7 +20,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // This is what parses the incoming JSON request
-app.use(express.json());
+// app.use(express.json());
 
 // app.post('/analyze', async (req, res) => {
 //   console.log(" Incoming Body:", req.body.files);
