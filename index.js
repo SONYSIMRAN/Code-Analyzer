@@ -1,4 +1,3 @@
-// Patch dynamic import if needed (for Node.js v18+)
 import('module').then(module => {
   global.__importModule = module;
 });
@@ -9,244 +8,92 @@ const { exec } = require('child_process');
 
 const app = express();
 const port = process.env.PORT || 8080;
+app.use(express.json({ limit: '20mb' })); // ⬅️ Allow large payloads
 
+app.post('/analyze', async (req, res) => {
+  console.log("📩 Received request with", req.body.files?.length, "files");
 
-// This is what parses the incoming JSON request
-app.use(express.json());
+  const files = req.body.files;
+  if (!Array.isArray(files) || files.length === 0) {
+    return res.status(400).json({ error: 'Request must include a non-empty files array' });
+  }
 
-// app.post('/analyze', async (req, res) => {
-//   console.log(" Incoming Body:", req.body.files);
-//   const files = req.body.files;
+  const results = [];
 
-//   if (!Array.isArray(files) || files.length === 0) {
-//     return res.status(400).json({ error: 'Request must include a non-empty files array' });
-//   }
+  for (const file of files) {
+    const { code, fileName } = file;
 
-//   const results = [];
-
-//   // Process each file in sequence
-//   for (const file of files) {
-//     const { code, fileName } = file;
-
-//     if (!code || !fileName) {
-//       results.push({ fileName, error: 'Missing code or fileName' });
-//       continue;
-//     }
-
-//     const timestamp = Date.now();
-//     const filePath = `./temp/${timestamp}_${fileName}`;
-
-//     try {
-//       fs.mkdirSync('./temp', { recursive: true });
-//       fs.writeFileSync(filePath, code);
-
-//       // Use Promise-wrapped exec to wait for result
-//       const analysis = await new Promise((resolve, reject) => {
-//         exec(`sfdx scanner:run --target ${filePath} --format json`, (err, stdout, stderr) => {
-//           fs.unlinkSync(filePath); // Clean up temp file
-//           if (err) return resolve({ fileName, error: stderr || err.message });
-
-//           try {
-//             const output = JSON.parse(stdout);
-//             resolve({ fileName, result: output });
-//           } catch (parseErr) {
-//             resolve({ fileName, error: 'Failed to parse scanner output' });
-//           }
-//         });
-//       });
-
-//       results.push(analysis);
-
-//     } catch (err) {
-//       results.push({ fileName, error: err.message });
-//     }
-//   }
-
-//   // Return results for all files
-//   res.json({ results });
-// });
-
-//  app.post('/analyze', async (req, res) => {
-//   console.log(" Incoming Body:", req.body.files);
-//   const files = req.body.files;
-
-//   if (!Array.isArray(files) || files.length === 0) {
-//     return res.status(400).json({ error: 'Request must include a non-empty files array' });
-//   }
-
-//   const results = [];
-
-//   for (const file of files) {
-//     const { code, fileName } = file;
-
-//     if (!code || !fileName) {
-//       results.push({ fileName, error: 'Missing code or fileName' });
-//       continue;
-//     }
-
-//     const timestamp = Date.now();
-//     const filePath = `./temp/${timestamp}_${fileName}`;
-
-//     try {
-//       fs.mkdirSync('./temp', { recursive: true });
-//       fs.writeFileSync(filePath, code, { encoding: 'utf8' });
-
-//       const analysis = await new Promise((resolve) => {
-//         exec(`sfdx scanner:run --target ${filePath} --format json`, (err, stdout, stderr) => {
-//           fs.unlinkSync(filePath);
-
-//           if (err || !stdout) {
-//             return resolve({ fileName, error: stderr || err.message });
-//           }
-
-//           try {
-//             const output = JSON.parse(stdout);
-//             const resultsArray = output;
-
-//             // Attach score to each result
-//             for (const result of resultsArray) {
-//               const violations = result.violations || [];
-//               let high = 0, medium = 0, low = 0;
-
-//               for (const v of violations) {
-//                 const severity = parseInt(v.severity, 10);
-//                 if (severity === 1) high++;
-//                 else if (severity === 2) medium++;
-//                 else low++;
-//               }
-
-//               const deduction = (high * 10) + (medium * 5) + (low * 1);
-//               const score = Math.max(0, 100 - deduction);
-//               result.score = score;
-//             }
-
-//             resolve({ fileName, result: resultsArray });
-
-//           } catch (parseErr) {
-//             resolve({ fileName, error: 'Failed to parse scanner output' });
-//           }
-//         });
-//       });
-
-//       // Add grade
-//       const scores = analysis.result?.map(r => r.score).filter(s => typeof s === 'number');
-//       if (scores && scores.length > 0) {
-//         const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-//         let grade = 'D';
-//         if (avgScore >= 90) grade = 'A';
-//         else if (avgScore >= 75) grade = 'B';
-//         else if (avgScore >= 60) grade = 'C';
-//         analysis.grade = grade;
-//       }
-
-//       results.push(analysis);
-
-//     } catch (err) {
-//       results.push({ fileName, error: err.message });
-//     }
-//   }
-
-//   // ✅ Add overall quality score
-//   const validScores = results.flatMap(r => (r.result || []).map(x => x.score).filter(s => typeof s === 'number'));
-//   const overallQualityScore = validScores.length
-//     ? Math.round(validScores.reduce((sum, s) => sum + s, 0) / validScores.length)
-//     : null;
-
-//   res.json({ overallQualityScore, results });
-// });
-
-  app.post('/analyze', async (req, res) => {
-    console.log(" Incoming Body:", req.body.files);
-    const files = req.body.files;
-
-    if (!Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ error: 'Request must include a non-empty files array' });
+    if (!code || !fileName) {
+      results.push({ fileName, error: 'Missing code or fileName' });
+      continue;
     }
 
-    const results = [];
+    const timestamp = Date.now();
+    const filePath = `./temp/${timestamp}_${fileName}`;
 
-    for (const file of files) {
-      const { code, fileName } = file;
+    try {
+      fs.mkdirSync('./temp', { recursive: true });
+      fs.writeFileSync(filePath, code);
 
-      if (!code || !fileName) {
-        results.push({ fileName, error: 'Missing code or fileName' });
-        continue;
-      }
+      const analysis = await new Promise((resolve) => {
+        const cmd = `sfdx scanner:run --target ${filePath} --format json`;
 
-      const timestamp = Date.now();
-      const filePath = `./temp/${timestamp}_${fileName}`;
+        // ⏱️ Set a hard timeout of 60s per file to avoid infinite hangs
+        const process = exec(cmd, { timeout: 60000 }, (err, stdout, stderr) => {
+          fs.unlinkSync(filePath);
 
-      try {
-        fs.mkdirSync('./temp', { recursive: true });
-        fs.writeFileSync(filePath, code);
+          if (err || !stdout) {
+            console.error(`⚠️ Scanner failed for ${fileName}:`, stderr || err.message);
+            return resolve({ fileName, error: stderr || err.message });
+          }
 
-        const analysis = await new Promise((resolve) => {
-          exec(`sfdx scanner:run --target ${filePath} --format json`, (err, stdout, stderr) => {
-            fs.unlinkSync(filePath);
-
-            if (err || !stdout) {
-              return resolve({ fileName, error: stderr || err.message });
-            }
-
-            try {
-              const parsed = JSON.parse(stdout);
-
-              // Attach scores per engine result
-              parsed.forEach(result => {
-                const violations = result.violations || [];
-                let high = 0, medium = 0, low = 0;
-
-                for (const v of violations) {
-                  const severity = parseInt(v.severity, 10);
-                  if (severity === 1) high++;
-                  else if (severity === 2) medium++;
-                  else low++;
-                }
-
-                const deduction = high * 10 + medium * 5 + low * 1;
-                result.score = Math.max(0, 100 - deduction);
+          try {
+            const parsed = JSON.parse(stdout);
+            parsed.forEach(result => {
+              const violations = result.violations || [];
+              let high = 0, medium = 0, low = 0;
+              violations.forEach(v => {
+                const sev = parseInt(v.severity, 10);
+                if (sev === 1) high++;
+                else if (sev === 2) medium++;
+                else low++;
               });
+              const deduction = high * 10 + medium * 5 + low;
+              result.score = Math.max(0, 100 - deduction);
+            });
 
-              // Compute average score for this file
-              const scores = parsed.map(r => r.score).filter(s => typeof s === 'number');
-              const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 100;
+            const scores = parsed.map(r => r.score).filter(s => typeof s === 'number');
+            const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 100;
 
-              // Assign grade
-              let grade = 'D';
-              if (avgScore >= 90) grade = 'A';
-              else if (avgScore >= 75) grade = 'B';
-              else if (avgScore >= 60) grade = 'C';
+            let grade = 'D';
+            if (avgScore >= 90) grade = 'A';
+            else if (avgScore >= 75) grade = 'B';
+            else if (avgScore >= 60) grade = 'C';
 
-              resolve({
-                fileName,
-                result: parsed,
-                grade
-              });
+            resolve({ fileName, result: parsed, grade });
 
-            } catch (e) {
-              resolve({ fileName, error: 'Failed to parse scanner output' });
-            }
-          });
+          } catch (e) {
+            resolve({ fileName, error: 'Failed to parse scanner output' });
+          }
         });
+      });
 
-        results.push(analysis);
-      } catch (err) {
-        results.push({ fileName, error: err.message });
-      }
+      results.push(analysis);
+    } catch (err) {
+      results.push({ fileName, error: err.message });
     }
+  }
 
-    // ✅ Calculate overall quality score
-    const allScores = results.flatMap(r => (r.result || []).map(x => x.score).filter(s => typeof s === 'number'));
-    const overallQualityScore = allScores.length
-      ? Math.round(allScores.reduce((sum, score) => sum + score, 0) / allScores.length)
-      : null;
+  // ✅ Final overall score
+  const allScores = results.flatMap(r => (r.result || []).map(x => x.score).filter(s => typeof s === 'number'));
+  const overallQualityScore = allScores.length
+    ? Math.round(allScores.reduce((sum, score) => sum + score, 0) / allScores.length)
+    : null;
 
-    res.json({ overallQualityScore, results });
-  });
+  res.setHeader('Content-Type', 'application/json');
+  res.json({ overallQualityScore, results });
+});
 
-
-
-
-  app.listen(port, () => {
-    console.log(`Analyzer running on port ${port}`);
-  });
+app.listen(port, () => {
+  console.log(`🚀 Analyzer running on port ${port}`);
+});
