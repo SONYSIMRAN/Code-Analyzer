@@ -11,7 +11,7 @@ const port = process.env.PORT || 8080;
 app.use(express.json({ limit: '20mb' })); // ⬅️ Allow large payloads
 
 app.post('/analyze', async (req, res) => {
-  console.log("📩 Received request with", req.body.files?.length, "files");
+  console.log("Received request with", req.body.files?.length, "files");
 
   const files = req.body.files;
   if (!Array.isArray(files) || files.length === 0) {
@@ -38,12 +38,12 @@ app.post('/analyze', async (req, res) => {
       const analysis = await new Promise((resolve) => {
         const cmd = `sfdx scanner:run --target ${filePath} --format json`;
 
-        // ⏱️ Set a hard timeout of 60s per file to avoid infinite hangs
+        // Set a hard timeout of 60s per file to avoid infinite hangs
         const process = exec(cmd, { timeout: 60000 }, (err, stdout, stderr) => {
           fs.unlinkSync(filePath);
 
           if (err || !stdout) {
-            console.error(`⚠️ Scanner failed for ${fileName}:`, stderr || err.message);
+            console.error(`Scanner failed for ${fileName}:`, stderr || err.message);
             return resolve({ fileName, error: stderr || err.message });
           }
 
@@ -70,7 +70,36 @@ app.post('/analyze', async (req, res) => {
             else if (avgScore >= 75) grade = 'B';
             else if (avgScore >= 60) grade = 'C';
 
-            resolve({ fileName, result: parsed, grade });
+            // resolve({ fileName, result: parsed, grade });
+            resolve({
+            fileName,
+            result: parsed,
+            grade,
+            metrics: (() => {
+            const violations = parsed.flatMap(r => r.violations || []);
+
+            // Coverage
+            const coverage = fileName.toLowerCase().includes('test') || violations.some(v =>
+              v.ruleName.toLowerCase().includes('test')) ? 100 : 0;
+
+            // Automation
+            const hasAssert = violations.some(v => v.ruleName === 'ApexUnitTestClassShouldHaveAsserts');
+            const automation = hasAssert ? 50 : 100;
+
+            // Performance
+            const perfRules = ['AvoidSoqlInLoops', 'AvoidDmlStatementsInLoops', 'AvoidDeeplyNestedIfStmts'];
+            const perfViolations = violations.filter(v => perfRules.includes(v.ruleName));
+            const performance = Math.max(0, 100 - perfViolations.length * 10);
+
+            // Dependency
+            const depRules = ['ApexPublicMethodUnused', 'ExcessiveImports', 'TooManyFields'];
+            const depViolations = violations.filter(v => depRules.includes(v.ruleName));
+            const dependency = Math.max(0, 100 - depViolations.length * 10);
+
+            return { coverage, automation, performance, dependency };
+            })()
+            });
+
 
           } catch (e) {
             resolve({ fileName, error: 'Failed to parse scanner output' });
@@ -84,7 +113,7 @@ app.post('/analyze', async (req, res) => {
     }
   }
 
-  // ✅ Final overall score
+  // Final overall score
   const allScores = results.flatMap(r => (r.result || []).map(x => x.score).filter(s => typeof s === 'number'));
   const overallQualityScore = allScores.length
     ? Math.round(allScores.reduce((sum, score) => sum + score, 0) / allScores.length)
